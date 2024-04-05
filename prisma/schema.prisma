@@ -1,0 +1,142 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider  = "postgresql"
+    // NOTE: When using mysql or sqlserver, uncomment the @db.Text annotations in model Account below
+    // Further reading:
+    // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
+    // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
+    url       = env("POSTGRES_PRISMA_URL") // uses connection pooling
+    directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
+}
+
+enum Role {
+    USER
+    SUPER_ADMIN
+}
+
+// Necessary for Next auth
+model Account {
+    id                String  @id @default(cuid())
+    userId            String
+    type              String
+    provider          String
+    providerAccountId String
+    refresh_token     String? // @db.Text
+    access_token      String? // @db.Text
+    expires_at        Int?
+    token_type        String?
+    scope             String?
+    id_token          String? // @db.Text
+    session_state     String?
+    user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([provider, providerAccountId])
+}
+
+model Session {
+    id           String   @id @default(cuid())
+    sessionToken String   @unique
+    userId       String
+    expires      DateTime
+    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+    id                       String                     @id @default(cuid())
+    name                     String?
+    email                    String?                    @unique
+    emailVerified            DateTime?
+    image                    String?
+    role                     Role                       @default(USER)
+    accounts                 Account[]
+    sessions                 Session[]
+    LemonSqueezySubscription LemonSqueezySubscription[]
+
+    plan         Plan?          @relation(fields: [planId], references: [id])
+    planId       Int?
+    FeatureUsage FeatureUsage[]
+
+    createdAt       DateTime          @default(now())
+    updatedAt       DateTime          @default(now()) @updatedAt
+    oneTimePurchase OneTimePurchase[]
+}
+
+model LemonSqueezyWebhookEvent {
+    id              Int      @id @default(autoincrement())
+    eventName       String
+    processed       Boolean  @default(false)
+    body            Json
+    createdAt       DateTime @default(now())
+    processingError String?
+}
+
+model LemonSqueezySubscription {
+    id                                  Int       @id @default(autoincrement())
+    lemonSqueezyId                      String    @unique
+    orderId                             Int
+    name                                String
+    email                               String
+    status                              String
+    renewsAt                            DateTime?
+    endsAt                              DateTime?
+    trialEndsAt                         DateTime?
+    isUsageBased                        Boolean   @default(false)
+    isPaused                            Boolean   @default(false)
+    customerId                          String
+    variantId                           String
+    customerPortalUrl                   String?
+    updatePaymentMethodUrl              String?
+    customerPortalUpdateSubscriptionUrl String?
+
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OneTimePurchase {
+    id             Int    @id @default(autoincrement())
+    lemonSqueezyId String @unique
+    orderId        Int
+    name           String
+    email          String
+    status         String
+    customerId     String
+    variantId      String
+
+    userId String
+    user   User   @relation(fields: [userId], references: [id])
+}
+
+model Plan {
+    id                    Int    @id @default(autoincrement())
+    lemonSqueezyVariantId String @unique
+    name                  String
+    credits               Int?
+
+    users User[] // This establishes the one-to-many relationship
+}
+
+model FeatureUsage {
+    id           String @id @default(cuid())
+    userId       String
+    buttonClicks Int    @default(0)
+
+    // Add more features as needed
+    date DateTime @default(now())
+    user User     @relation(fields: [userId], references: [id])
+
+    @@unique([userId, date])
+}
+
+model VerificationToken {
+    identifier String
+    token      String   @unique
+    expires    DateTime
+
+    @@unique([identifier, token])
+}
